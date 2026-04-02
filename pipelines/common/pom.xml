@@ -250,6 +250,12 @@
       <groupId>org.apache.beam</groupId>
       <artifactId>beam-sdks-java-io-google-cloud-platform</artifactId>
       <version>${beam.version}</version>
+      <exclusions>
+      <exclusion>
+        <groupId>com.squareup.okhttp3</groupId>
+        <artifactId>okhttp</artifactId>
+      </exclusion>
+    </exclusions>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
