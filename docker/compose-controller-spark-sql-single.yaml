@@ -46,10 +46,29 @@
 # to /opt/bitnami/spark/conf/
 # https://spark.apache.org/docs/latest/configuration.html
 
-# Version 2.4 supports healthcheck feature.
-version: '2.4'
-
 services:
+  fhir-views-db:
+    image: postgres:15
+    container_name: fhir-views-db
+    restart: always
+    environment:
+      POSTGRES_DB: views
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    ports:
+      - '5436:5432'
+    volumes:
+      - fhir_views_db_data:/var/lib/postgresql/data
+    networks:
+      - cloudbuild
+      - default
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d views"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+      timeout: 5s
+
   pipeline-controller:
     # to force a build use `--build` option of `docker-compose up`.
     build:
@@ -67,7 +86,7 @@ services:
       - FHIRDATA_GENERATEPARQUETFILES=${FHIRDATA_GENERATEPARQUETFILES:-true}
       - FHIRDATA_CREATEHIVERESOURCETABLES=${FHIRDATA_CREATEHIVERESOURCETABLES:-true}
       - FHIRDATA_CREATEPARQUETVIEWS=${FHIRDATA_CREATEPARQUETVIEWS:-true}
-      - FHIRDATA_SINKDBCONFIGPATH=${FHIRDATA_SINKDBCONFIGPATH:-config/hapi-postgres-config_local_views.json}
+      - FHIRDATA_SINKDBCONFIGPATH=${FHIRDATA_SINKDBCONFIGPATH:-config/fhir-views-db-config.json}
       - FHIRDATA_NUMTHREADS=${FHIRDATA_NUMTHREADS:--1}
     ports:
       - '8090:8080'
@@ -76,6 +95,8 @@ services:
       - default
     depends_on:
       spark:
+        condition: service_healthy
+      fhir-views-db:
         condition: service_healthy
 
   spark:
@@ -86,6 +107,8 @@ services:
       - --driver-memory
       # You may need to increase this if your queries/data are too large.
       - 5g
+      - --conf
+      - spark.sql.parquet.mergeSchema=false
     environment:
       - HIVE_SERVER2_THRIFT_PORT=10000
     ports:
@@ -97,8 +120,10 @@ services:
       # If you want to persist the Metastore data, e.g., table and view
       # definitions, you can use an external database by adjusting hive-site.xml
       #- ./hive-site_example.xml:/opt/bitnami/spark/conf/hive-site.xml
-      # Note to use an external DB, you need to provide its driver jar too:
-      #- ./postgresql-42.6.0.jar:/opt/bitnami/spark/jars/postgresql-42.6.0.jar
+      # Postgres JDBC driver: needed for views (e.g. Encounter_fact_view) that
+      # push their results into the fhir-views-db Postgres instance via a
+      # `CREATE TABLE ... USING jdbc` + `INSERT INTO` sink table.
+      - ./postgresql-42.7.4.jar:/opt/bitnami/spark/jars/postgresql-42.7.4.jar
       - spark_vol_single:/opt/bitnami/spark
     networks:
       - cloudbuild
@@ -110,9 +135,57 @@ services:
       start_period: 5s
       timeout: 60s
 
+  # [THỬ NGHIỆM ViewDefinition/FHIRPath thay Bunsen] Comment tạm service này để
+  # test 3 view mới (encounter_extension_view.json, claim_extension_view.json,
+  # coverage_extension_view.json trong config/views) có tự chạy qua
+  # ViewApplicator/pipeline-controller và cho ra đúng giá trị extension hay
+  # không, không phụ thuộc/che lấp bởi dữ liệu do service này ghi ra
+  # /dwh/extension-source/*.ndjson. Bỏ comment lại nếu cần rollback.
+  # extension-source-refresh:
+  #   # Chạy nền: định kỳ tải nguyên JSON (có extension) của Encounter, Claim,
+  #   # Coverage từ fhirServerUrl và ghi ra /dwh/extension-source/<loai>_raw.ndjson
+  #   # (1 file/resource type). KHÔNG tạo bảng/view Postgres nào, KHÔNG đụng
+  #   # Bunsen/pipeline Java - chỉ ghi các file NDJSON mà các view đọc thẳng bằng
+  #   # `json.`/dwh/extension-source/<loai>_raw.ndjson`` (Spark tự suy schema từ
+  #   # JSON, không qua Bunsen nên không bị giới hạn profile).
+  #   # Claim: Claim_fact.sql đọc để lấy vn-ext-claim-cost-summary (Medication/
+  #   # MedicalSupply/Insurance/PatientCopay/PatientSelfPay/OtherFund Amount) và
+  #   # vn-ext-claim-payment-period (SettlementYear/Month).
+  #   # Coverage: Coverage_dim.sql đọc để lấy vn-ext-primary-care-facility
+  #   # (PrimaryCareFacilityCode).
+  #   # Xem docker/extension-source-refresh/refresh_extension_source.py.
+  #   image: python:3.12-slim
+  #   container_name: extension-source-refresh
+  #   working_dir: /app
+  #   command: >
+  #     sh -c "pip install --quiet --no-cache-dir -r requirements.txt && python refresh_extension_source.py"
+  #   environment:
+  #     - FHIR_SERVER_URL=http://172.16.12.230:8013/fhir
+  #     - REFRESH_INTERVAL_SECONDS=300
+  #     - EXTENSION_SOURCE_RESOURCE_TYPES=Encounter,Claim,Coverage
+  #     - OUTPUT_DIR=/dwh/extension-source
+  #   volumes:
+  #     - ./extension-source-refresh:/app:ro
+  #     - ${DWH_ROOT}:/dwh
+  #   restart: unless-stopped
+  #   networks:
+  #     - cloudbuild
+  #     - default
+  #   depends_on:
+  #     fhir-views-db:
+  #       condition: service_healthy
+
+  # [ĐÃ BỎ] terminology-loader (script curl+psql nạp Dim_ICD10/Dim_LOINC vào Postgres) -
+  # không cần nữa. Đã chuyển hẳn sang cơ chế pipeline-native: "CodeSystem" được thêm vào
+  # resourceList (application.yaml) như 1 resource FHIR bình thường, pipeline tự crawl lại
+  # mỗi lần chạy; CodeSystem_icd10_view.sql / CodeSystem_loinc_view.sql (trong config/views)
+  # đọc thẳng bảng CodeSystem qua Spark SQL, không script/service riêng nào cả. Xem
+  # ICD10_codesystem_view / LOINC_codesystem_view, join vào từ Condition_dim.sql /
+  # Observation_fact.sql.
 
 volumes:
   spark_vol_single:
+  fhir_views_db_data:
 
 networks:
   cloudbuild:

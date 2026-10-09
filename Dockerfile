@@ -15,7 +15,11 @@
 # This creates a docker image for running the controller web-app. It is expected
 # that in real use-cases, the config dir will be mounted to the host machine.
 
-FROM maven:3.8.7-eclipse-temurin-17-focal as build
+# --platform=$BUILDPLATFORM: khi build multi-arch, stage này luôn chạy native
+# trên kiến trúc của máy build (amd64 trên runner GitHub) thay vì bị emulate.
+# An toàn vì output là bytecode Java + JS — không phụ thuộc kiến trúc, và các
+# pom.xml không dùng profile theo os/arch. Chỉ stage `main` mới cần QEMU.
+FROM --platform=$BUILDPLATFORM maven:3.8.7-eclipse-temurin-17-focal as build
 
 RUN apt-get update && apt-get install -y nodejs npm
 RUN npm cache clean -f && npm install -g n && n stable
@@ -36,11 +40,11 @@ COPY ./synthea-hiv/pom.xml ./synthea-hiv/pom.xml
 
 # Updating license will fail in e2e and there is no point doing it here anyways.
 # Note this build can be faster by excluding some uber-jars we don't copy.
-RUN mvn --no-transfer-progress --batch-mode clean package -Dlicense.skip=true -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Dspotless.apply.skip=true -T 2C
+RUN mvn --no-transfer-progress --batch-mode clean package -Dlicense.skip=true -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -Dspotless.apply.skip=true -DskipTests -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=3 -T 2C
 
 FROM eclipse-temurin:17-jdk-focal as main
 
-RUN apt-get update && apt-get install -y libjemalloc-dev
+RUN apt-get update && apt-get install -y libjemalloc-dev dos2unix
 
 # Install Python and pip and clean up apt cache
 RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
@@ -65,5 +69,5 @@ COPY ./docker/config ./config
 ENV FLINK_CONF_DIR=/app/config
 
 COPY docker-entrypoint.sh /
-RUN chmod +x /docker-entrypoint.sh
+RUN dos2unix /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]

@@ -1,0 +1,35 @@
+{
+  "resourceType": "http://hl7.org/fhir/uv/sql-on-fhir/StructureDefinition/ViewDefinition",
+  "text": "THU: thay cho viec doc encounter_raw.ndjson qua service extension-source-refresh. Dung FHIRPath extension() de doc thang Encounter.extension (vn-ext-insurance-visit-type, vn-ext-treatment-outcome) - ViewApplicator chay FHIRPath tren resource FHIR goc, khong qua Bunsen nen khong bi mat truong extension. Ket qua duoc pipeline-controller dang ky thanh Hive/Spark view `default.encounter_extension`, join vao boi id trong Encounter_fact.sql.",
+  "name": "encounter_extension",
+  "status": "draft",
+  "resource": "Encounter",
+  "fhirVersion": ["4.0"],
+  "select": [
+    {
+      "column": [
+        { "path": "getResourceKey()", "name": "id", "type": "id" },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-insurance-visit-type').value.ofType(CodeableConcept).coding.code.first()",
+          "name": "PatientCategoryCode",
+          "type": "code"
+        },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-insurance-visit-type').value.ofType(CodeableConcept).coding.display.first()",
+          "name": "PatientCategoryDisplay",
+          "type": "string"
+        },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-treatment-outcome').value.ofType(CodeableConcept).coding.code.first()",
+          "name": "TreatmentOutcomeCode",
+          "type": "code"
+        },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-treatment-outcome').value.ofType(CodeableConcept).coding.display.first()",
+          "name": "TreatmentOutcomeName",
+          "type": "string"
+        }
+      ]
+    }
+  ]
+}

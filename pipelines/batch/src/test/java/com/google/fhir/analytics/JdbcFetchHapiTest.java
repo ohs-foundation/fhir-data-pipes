@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2025 Google LLC
+ * Copyright 2020-2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 package com.google.fhir.analytics;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -29,6 +30,7 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.apache.beam.sdk.io.jdbc.JdbcIO;
 import org.apache.beam.sdk.options.PipelineOptionsFactory;
 import org.apache.beam.sdk.testing.TestPipeline;
 import org.junit.Before;
@@ -99,6 +101,37 @@ public class JdbcFetchHapiTest {
     assertEquals("2002-03-12 10:09:20", rowDescriptor.lastUpdated());
     assertEquals("R4", rowDescriptor.fhirVersion());
     assertEquals("", rowDescriptor.jsonResource());
+  }
+
+  @Test
+  public void testFetchQueryFallsBackToFhirIdWhenForcedIdMissing() {
+    String query =
+        new JdbcFetchHapi.FetchRowsJdbcIo(
+                "Encounter", Mockito.mock(JdbcIO.DataSourceConfiguration.class), "")
+            .getQuery();
+
+    // HAPI 7+ leaves `hfj_forced_id` empty and stores the client id in `hfj_resource.fhir_id`.
+    assertThat(query, containsString("COALESCE(hfi.forced_id, res.fhir_id) AS forced_id"));
+    assertThat(query, containsString("LEFT JOIN hfj_forced_id hfi"));
+  }
+
+  @Test
+  public void testMapRowUsesFhirIdAsForcedId() throws Exception {
+    Mockito.when(resultSet.getString("res_encoding")).thenReturn("DEL");
+    Mockito.when(resultSet.getString("res_id")).thenReturn("220000");
+    Mockito.when(resultSet.getString("forced_id"))
+        .thenReturn("b743733c-d794-5c4c-a6d2-42ed83dc4d42");
+    Mockito.when(resultSet.getString("res_type")).thenReturn("Encounter");
+    Mockito.when(resultSet.getString("res_updated")).thenReturn("2002-03-12 10:09:20");
+    Mockito.when(resultSet.getString("res_ver")).thenReturn("1");
+    Mockito.when(resultSet.getString("res_version")).thenReturn("R4");
+
+    HapiRowDescriptor rowDescriptor =
+        new JdbcFetchHapi.ResultSetToRowDescriptor(options.getResourceList()).mapRow(resultSet);
+
+    assertNotNull(rowDescriptor);
+    assertEquals("220000", rowDescriptor.resourceId());
+    assertEquals("b743733c-d794-5c4c-a6d2-42ed83dc4d42", rowDescriptor.forcedId());
   }
 
   @Test

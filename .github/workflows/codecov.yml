@@ -4,6 +4,12 @@ name: Codecov
 on: [push, pull_request]
 jobs:
   run:
+    # [TẮT TRÊN FORK] Job này chạy `mvn install` + `mvn test` toàn project ở MỌI
+    # push và MỌI pull_request — nặng nhất trong repo. Fork LACVIET-YTE không có
+    # secret CODECOV_TOKEN và cũng không dùng dashboard Codecov, nên bước upload
+    # luôn fail → mỗi lần push đều có 1 workflow đỏ vô nghĩa.
+    # Điều kiện dưới giữ nguyên hành vi khi đóng góp ngược lên upstream.
+    if: github.repository == 'ohs-foundation/fhir-data-pipes'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout

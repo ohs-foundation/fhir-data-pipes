@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2025 Google LLC
+ * Copyright 2020-2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,10 +151,14 @@ public class JdbcFetchHapi {
       this.resourceList = resourceList;
       this.dataSourceConfig = dataSourceConfig;
       // Note the constraint on `res.res_ver` ensures we only pick the latest version.
+      // HAPI 7+ keeps client-assigned ids in `hfj_resource.fhir_id` and leaves `hfj_forced_id`
+      // empty; without the fallback every resource gets its numeric res_id as id while
+      // references inside the resources keep the client id, so nothing joins downstream.
       StringBuilder builder =
           new StringBuilder(
-              "SELECT res.res_id, hfi.forced_id, res.res_type, res.res_updated, res.res_ver,"
-                  + " res.res_version, ver.res_encoding, ver.res_text, ver.res_text_vc "
+              "SELECT res.res_id, COALESCE(hfi.forced_id, res.fhir_id) AS forced_id,"
+                  + " res.res_type, res.res_updated, res.res_ver, res.res_version,"
+                  + " ver.res_encoding, ver.res_text, ver.res_text_vc "
                   + " FROM hfj_resource res JOIN"
                   + " hfj_res_ver ver ON res.res_id = ver.res_id AND res.res_ver = ver.res_ver "
                   + " LEFT JOIN hfj_forced_id hfi ON res.res_id = hfi.resource_pid "
@@ -177,6 +181,11 @@ public class JdbcFetchHapi {
       }
       tagQuery = builder.toString();
       log.info("JDBC query for tags: " + tagQuery);
+    }
+
+    @VisibleForTesting
+    String getQuery() {
+      return query;
     }
 
     @Override

@@ -21,7 +21,14 @@ taskmanager.memory.network.max: 256mb
 # This is needed to be able to process large resources, otherwise in JDBC
 # mode we may get the following exception:
 # "The record exceeds the maximum size of a sort buffer ..."
-taskmanager.memory.managed.size: 256mb
+# Reduced from 2gb: this off-heap allocation plus the JVM heap must fit the
+# small Docker Desktop VM (~7.7GB shared with Spark and Postgres).
+taskmanager.memory.managed.size: 1gb
+
+# The default 50s heartbeat timeout is too aggressive on a small shared VM
+# where GC pauses / CPU contention can delay the TaskManager.
+heartbeat.interval: 30000
+heartbeat.timeout: 300000
 
 # This is to make pipeline.run() non-blocking with FlinkRunner; unfortunately
 # this is overwritten in `local` mode: https://stackoverflow.com/a/74416240

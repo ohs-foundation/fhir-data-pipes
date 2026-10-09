@@ -1,0 +1,55 @@
+{
+  "resourceType": "http://hl7.org/fhir/uv/sql-on-fhir/StructureDefinition/ViewDefinition",
+  "text": "THU: thay cho viec doc claim_raw.ndjson qua service extension-source-refresh. Dung FHIRPath extension() de doc thang Claim.extension (vn-ext-claim-cost-summary, vn-ext-claim-payment-period - 2 extension phuc hop, moi field con la 1 sub-extension theo url rieng). Ket qua duoc dang ky thanh Hive/Spark view `default.claim_extension`, join vao boi id trong Claim_fact.sql.",
+  "name": "claim_extension",
+  "status": "draft",
+  "resource": "Claim",
+  "fhirVersion": ["4.0"],
+  "select": [
+    {
+      "column": [
+        { "path": "getResourceKey()", "name": "id", "type": "id" },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-claim-cost-summary').extension('totalMedication').value.ofType(Money).value.first()",
+          "name": "MedicationAmount",
+          "type": "decimal"
+        },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-claim-cost-summary').extension('totalSupplies').value.ofType(Money).value.first()",
+          "name": "MedicalSupplyAmount",
+          "type": "decimal"
+        },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-claim-cost-summary').extension('totalInsurance').value.ofType(Money).value.first()",
+          "name": "InsuranceBenefitAmount",
+          "type": "decimal"
+        },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-claim-cost-summary').extension('totalPatientCopay').value.ofType(Money).value.first()",
+          "name": "PatientCopayAmount",
+          "type": "decimal"
+        },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-claim-cost-summary').extension('totalPatientSelfPay').value.ofType(Money).value.first()",
+          "name": "PatientSelfPayAmount",
+          "type": "decimal"
+        },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-claim-cost-summary').extension('totalOtherFund').value.ofType(Money).value.first()",
+          "name": "OtherFundingAmount",
+          "type": "decimal"
+        },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-claim-payment-period').extension('year').value.ofType(integer).first()",
+          "name": "SettlementYear",
+          "type": "integer"
+        },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-claim-payment-period').extension('month').value.ofType(integer).first()",
+          "name": "SettlementMonth",
+          "type": "integer"
+        }
+      ]
+    }
+  ]
+}

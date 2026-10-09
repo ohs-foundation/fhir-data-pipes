@@ -1,0 +1,20 @@
+{
+  "resourceType": "http://hl7.org/fhir/uv/sql-on-fhir/StructureDefinition/ViewDefinition",
+  "text": "THU: thay cho viec doc coverage_raw.ndjson qua service extension-source-refresh. Dung FHIRPath extension() de doc thang Coverage.extension (vn-ext-primary-care-facility). Ket qua duoc dang ky thanh Hive/Spark view `default.coverage_extension`, join vao boi id trong Coverage_dim.sql.",
+  "name": "coverage_extension",
+  "status": "draft",
+  "resource": "Coverage",
+  "fhirVersion": ["4.0"],
+  "select": [
+    {
+      "column": [
+        { "path": "getResourceKey()", "name": "id", "type": "id" },
+        {
+          "path": "extension('http://fhir.hl7.org.vn/core/StructureDefinition/vn-ext-primary-care-facility').value.ofType(Reference).identifier.value.first()",
+          "name": "PrimaryCareFacilityCode",
+          "type": "string"
+        }
+      ]
+    }
+  ]
+}

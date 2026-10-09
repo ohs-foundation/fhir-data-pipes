@@ -1,0 +1,91 @@
+name: Docker — lvai-pipeline-controller
+
+# Build image controller (Dockerfile ở gốc repo, tương đương image upstream
+# us-docker.pkg.dev/cloud-build-fhir/fhir-analytics/main) và đẩy lên GHCR.
+# Upstream chỉ publish amd64 nên phải tự build để có bản arm64.
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'bunsen/**'
+      - 'pipelines/**'
+      - 'utils/**'
+      - 'coverage/**'
+      - 'docker/**'
+      - 'pom.xml'
+      - 'Dockerfile'
+      - 'docker-entrypoint.sh'
+      - '.dockerignore'
+      - '.github/workflows/docker-pipeline-controller.yml'
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/lvai-pipeline-controller
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Runner ubuntu-latest chỉ có ~14GB trống. Build 2 kiến trúc cộng
+      # cache-to mode=max (export mọi layer trung gian của CẢ HAI arch) làm
+      # BuildKit hết đĩa: "ResourceExhausted: ... no space left on device".
+      # Các toolchain dưới đây được cài sẵn trên runner nhưng build này không
+      # dùng (mọi thứ chạy trong Docker), xoá đi lấy lại vài chục GB.
+      - name: Free disk space
+        run: |
+          echo "Before:"; df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
+                      /usr/local/share/powershell /usr/share/swift
+          sudo docker image prune -af || true
+          echo "After:"; df -h / | tail -1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+
+      # Chỉ cần emulate arm64 — runner ubuntu-latest chạy native amd64.
+      # QEMU chỉ dùng cho stage `main` (apt-get, pip install controller-cli);
+      # stage build maven đã ghim --platform=$BUILDPLATFORM nên chạy native.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

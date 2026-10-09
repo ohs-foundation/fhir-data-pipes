@@ -1,0 +1,9 @@
+{
+  "jdbcDriverClass": "org.postgresql.Driver",
+  "databaseService": "postgresql",
+  "databaseHostName": "fhir-views-db",
+  "databasePort": "5432",
+  "databaseUser": "admin",
+  "databasePassword": "admin",
+  "databaseName": "views"
+}

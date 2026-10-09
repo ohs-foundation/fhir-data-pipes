@@ -78,6 +78,8 @@ services:
       - --driver-memory
       # You may need to increase this if your queries/data are too large.
       - 5g
+      - --conf
+      - spark.sql.parquet.mergeSchema=false
     environment:
       - HIVE_SERVER2_THRIFT_PORT=10000
     ports:

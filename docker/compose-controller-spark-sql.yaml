@@ -141,6 +141,8 @@ services:
       - sbin/start-thriftserver.sh
       - --master
       - spark://spark-master:7077
+      - --conf
+      - spark.sql.parquet.mergeSchema=false
     environment:
       - HIVE_SERVER2_THRIFT_PORT=10000
     ports:

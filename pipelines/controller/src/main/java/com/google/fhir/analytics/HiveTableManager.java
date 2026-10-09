@@ -27,6 +27,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -137,6 +138,11 @@ public class HiveTableManager {
                   path ->
                       path.getFileName().toString().startsWith(resource)
                           && path.getFileName().toString().endsWith(".sql"))
+              // Files.list() does not guarantee any particular order (e.g., on ext4 with
+              // htree-indexed directories it reflects filename hash buckets, not creation or
+              // lexicographic order). Views such as `X_pg_sync.sql` depend on `X.sql` and
+              // `X_pg_sink.sql` having already run, so a stable, predictable order is required.
+              .sorted(Comparator.comparing(path -> path.getFileName().toString()))
               .toList();
 
     } catch (IOException e) {
