@@ -59,6 +59,6 @@ mvn test -pl pipelines/common -am -Dtest=SQLonFHIRv2Test \
 
 Without that property the report goes to a temp file, whose path the test logs.
 Note that temp directory is platform dependent: on macOS it is the private
-per-user directory in `$TMPDIR` (`/var/folders/.../T/`), **not** `/tmp`, and each
-run leaves a new randomly-named file there. See the
+per-user directory in `$TMPDIR` (`/var/folders/.../T/`), **not** `/tmp`, and
+each run leaves a new randomly-named file there. See the
 [vendoring README](../../../../../../utils/sof_tests/README.md) for details.

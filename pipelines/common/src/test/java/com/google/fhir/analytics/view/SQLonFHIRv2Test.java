@@ -75,28 +75,35 @@ public class SQLonFHIRv2Test {
           // Reason: The `repeat` element of `select` (recursive traversal of a FHIRPath) is not
           // implemented by ViewApplicator. Note it is currently ignored silently, i.e., a view with
           // `repeat` produces rows as if the `repeat` was not there.
-          // TODO implement `repeat` support in ViewApplicator.
+          // TODO implement `repeat` support in ViewApplicator; tracked in
+          // https://github.com/ohs-foundation/fhir-data-pipes/issues/1747
           "repeat",
           // Reason: The `%rowIndex` environment variable is not implemented by ViewApplicator.
-          // TODO implement `%rowIndex` support in ViewApplicator.
+          // TODO implement `%rowIndex` support in ViewApplicator; tracked in
+          // https://github.com/ohs-foundation/fhir-data-pipes/issues/1748
           "row_index");
 
   private static final Set<String> SKIPPED_TESTS =
       ImmutableSet.of(
-          // Reason: The `join()` function of R4 FHIRPathEngine implementation requires a parameter.
-          // In the FHIRPath spec `join()` may have zero arguments and this seems to be fixed in the
-          // R5 implementation of FHIRPathEngine, so this might be a version issue:
-          // https://build.fhir.org/ig/HL7/FHIRPath/#joinseparator-string--string
-          // TODO report and/or fix this is the core FHIR implementation.
+          // Reason: The `join()` function of the R4 FHIRPathEngine requires a separator argument
+          // while the FHIRPath spec makes it optional. This is fixed in org.hl7.fhir.core 6.5.18+
+          // (shipped with HAPI 8.2.0+); we are on HAPI 7.6.1 which uses core 6.4.0.
+          // TODO remove once HAPI is upgraded; tracked in
+          // https://github.com/ohs-foundation/fhir-data-pipes/issues/1749
           "fn_join.join with no value - default to no separator",
           // Reason: When `join()` is applied to an empty collection, the R4/R5 FHIRPathEngine
           // implementations return a single empty string instead of an empty collection, so the
-          // column is not `null` as these tests expect.
-          // TODO report and/or fix this is the core FHIR implementation.
+          // column is not `null` as these tests expect. This is fixed in org.hl7.fhir.core 7.0.0
+          // (hapifhir/org.hl7.fhir.core@503ec1c025), which no HAPI release ships yet.
+          // TODO remove once HAPI is upgraded; tracked in
+          // https://github.com/ohs-foundation/fhir-data-pipes/issues/1749
           "fn_join.join with comma",
           "fn_join.join with empty value",
 
-          // TODO the error condition here does not seem right.
+          // Reason: Gson coerces the JSON number in `"forEach": 1` to the string "1", which is a
+          // valid FHIRPath, so no error is raised although the test expects one.
+          // TODO reject non-string values for FHIRPath fields in ViewDefinition; tracked in
+          // https://github.com/ohs-foundation/fhir-data-pipes/issues/1750
           "validate.wrong type in forEach");
 
   @SuppressWarnings("NullAway")
