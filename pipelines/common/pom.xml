@@ -28,8 +28,8 @@
   <artifactId>common</artifactId>
 
   <properties>
-    <c3p0.version>0.14.1</c3p0.version>
-    <guava.version>33.6.0-jre</guava.version>
+    <c3p0.version>0.14.2</c3p0.version>
+    <guava.version>33.7.2-jre</guava.version>
     <jupiter.version>6.1.3</jupiter.version>
   </properties>
 
@@ -128,7 +128,7 @@
     <dependency>
       <groupId>commons-codec</groupId>
       <artifactId>commons-codec</artifactId>
-      <version>1.22.0</version>
+      <version>1.23.0</version>
       <scope>runtime</scope>
     </dependency>
 
@@ -224,7 +224,7 @@
     <dependency>
       <groupId>com.google.jimfs</groupId>
       <artifactId>jimfs</artifactId>
-      <version>1.3.1</version>
+      <version>1.3.2</version>
       <scope>test</scope>
     </dependency>
 
