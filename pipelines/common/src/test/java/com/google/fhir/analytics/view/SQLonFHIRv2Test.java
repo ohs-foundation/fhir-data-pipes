@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2025 Google LLC
+ * Copyright 2020-2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,22 +67,43 @@ public class SQLonFHIRv2Test {
 
   private static final Logger log = LoggerFactory.getLogger(SQLonFHIRv2Test.class);
 
+  // Whole test-collections (i.e., test files) that are skipped, keyed by the collection `title`.
+  // These are for ViewDefinition features that we have not implemented yet; unlike SKIPPED_TESTS
+  // below, every test in the file is skipped.
+  private static final Set<String> SKIPPED_COLLECTIONS =
+      ImmutableSet.of(
+          // Reason: The `repeat` element of `select` (recursive traversal of a FHIRPath) is not
+          // implemented by ViewApplicator. Note it is currently ignored silently, i.e., a view with
+          // `repeat` produces rows as if the `repeat` was not there.
+          // TODO implement `repeat` support in ViewApplicator; tracked in
+          // https://github.com/ohs-foundation/fhir-data-pipes/issues/1747
+          "repeat",
+          // Reason: The `%rowIndex` environment variable is not implemented by ViewApplicator.
+          // TODO implement `%rowIndex` support in ViewApplicator; tracked in
+          // https://github.com/ohs-foundation/fhir-data-pipes/issues/1748
+          "row_index");
+
   private static final Set<String> SKIPPED_TESTS =
       ImmutableSet.of(
-          // Reason: The `join()` function of R4 FHIRPathEngine implementation requires a parameter.
-          // In the FHIRPath spec `join()` may have zero arguments and this seems to be fixed in the
-          // R5 implementation of FHIRPathEngine, so this might be a version issue:
-          // https://build.fhir.org/ig/HL7/FHIRPath/#joinseparator-string--string
-          // TODO report and/or fix this is the core FHIR implementation.
+          // Reason: The `join()` function of the R4 FHIRPathEngine requires a separator argument
+          // while the FHIRPath spec makes it optional. This is fixed in org.hl7.fhir.core 6.5.18+
+          // (shipped with HAPI 8.2.0+); we are on HAPI 7.6.1 which uses core 6.4.0.
+          // TODO remove once HAPI is upgraded; tracked in
+          // https://github.com/ohs-foundation/fhir-data-pipes/issues/1749
           "fn_join.join with no value - default to no separator",
-          "fhirpath.string join: default separator",
-          // Reason: `lowBoundry()` and `highBoundry()` functions when called with no precision
-          // parameters (for `date` type), default to 8 as the precision which is incorrect.
-          // TODO report and/or fix this is the core FHIR implementation.
-          "fn_boundary.date lowBoundary",
-          "fn_boundary.date highBoundary",
+          // Reason: When `join()` is applied to an empty collection, the R4/R5 FHIRPathEngine
+          // implementations return a single empty string instead of an empty collection, so the
+          // column is not `null` as these tests expect. This is fixed in org.hl7.fhir.core 7.0.0
+          // (hapifhir/org.hl7.fhir.core@503ec1c025), which no HAPI release ships yet.
+          // TODO remove once HAPI is upgraded; tracked in
+          // https://github.com/ohs-foundation/fhir-data-pipes/issues/1749
+          "fn_join.join with comma",
+          "fn_join.join with empty value",
 
-          // TODO the error condition here does not seem right.
+          // Reason: Gson coerces the JSON number in `"forEach": 1` to the string "1", which is a
+          // valid FHIRPath, so no error is raised although the test expects one.
+          // TODO reject non-string values for FHIRPath fields in ViewDefinition; tracked in
+          // https://github.com/ohs-foundation/fhir-data-pipes/issues/1750
           "validate.wrong type in forEach");
 
   @SuppressWarnings("NullAway")
@@ -117,8 +138,11 @@ public class SQLonFHIRv2Test {
           resources.add(parser.parseResource(r.toString()));
         }
         for (SingleTest test : testDef.tests) {
-          if (SKIPPED_TESTS.contains(testDef.title + "." + test.title)) {
-            success.put(testDef.title, false);
+          if (SKIPPED_COLLECTIONS.contains(testDef.title)
+              || SKIPPED_TESTS.contains(testDef.title + "." + test.title)) {
+            // Note this is keyed by the test title (not the collection title) such that the
+            // generated report lists the skipped test itself.
+            success.put(test.title, false);
             continue;
           }
           // Note: To debug a single test case we can do the following:
@@ -167,11 +191,21 @@ public class SQLonFHIRv2Test {
         allTestResults.put(p.getFileName().toString(), new AllTestResults(resultList));
       }
     }
-    File tempFile = File.createTempFile("sql-on-fhir-v2-test-result-", ".json");
-    try (FileWriter writer = new FileWriter(tempFile, StandardCharsets.UTF_8)) {
+    // By default this report is written to a temp file. Set `-Dsofv2.resultFile=<path>` to
+    // write it straight to its checked-in location when re-importing the test-suite; see
+    // utils/sof_tests/README.md. Note the default temp directory is platform dependent: on
+    // macOS it is the private per-user directory in `$TMPDIR` (e.g. `/var/folders/.../T/`)
+    // rather than `/tmp`, which is why the final path is always logged.
+    String configuredPath = System.getProperty("sofv2.resultFile");
+    File resultFile =
+        (configuredPath == null || configuredPath.isEmpty())
+            ? File.createTempFile("sql-on-fhir-v2-test-result-", ".json")
+            : new File(configuredPath);
+    try (FileWriter writer = new FileWriter(resultFile, StandardCharsets.UTF_8)) {
       Gson writerGson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
       writerGson.toJson(allTestResults, writer);
     }
+    log.info("Wrote SQL-on-FHIR v2 conformance results to {}", resultFile.getAbsolutePath());
   }
 
   @SuppressWarnings("NullAway.Init")
